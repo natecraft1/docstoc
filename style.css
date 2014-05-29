@@ -1,0 +1,130 @@
+html, body {
+	height: 100%;
+	overflow: hidden;
+}
+body {
+	background-color: #F7F7F7;
+	width: 100%;
+	font-family: 'Cabin Condensed', sans-serif;
+	text-transform: uppercase;
+	overflow-x: hidden;
+	float: left;
+}
+svg {
+	margin-right: 15%;
+	float: right;
+}
+@-webkit-keyframes wave-animation {
+	0%   { background-position:0px bottom; }
+	100% { background-position:200px bottom; }
+}
+@-moz-keyframes wave-animation {
+	0%   { background-position:0px bottom; }
+	100% { background-position:200px bottom; }
+}
+@-o-keyframes wave-animation {
+	0%   { background-position:0px bottom; }
+	100% { background-position:200px bottom; }
+}
+@keyframes wave-animation {
+	0%   { background-position:0px bottom; }
+	100% { background-position:200px bottom; }
+}
+section {
+	float: left;
+	height: 100%;
+}
+section p {
+	font-size: 30px;
+	font-family: 'Cabin Condensed', sans-serif;
+	text-align: center;
+	margin: 0;
+	clear: both;
+	color: #454545;
+}
+.bucket {
+	margin: 5px;
+	height:100px;
+	vertical-align:bottom;
+	background-image:url('imgs/bluewave.png');
+	width: 200px;
+	color:rgba(0,0,0,0);
+	-webkit-animation: wave-animation 3s infinite linear;
+	-moz-animation: wave-animation 3s infinite linear;
+	-o-animation: wave-animation 3s infinite linear;
+	animation: wave-animation 3s infinite linear;
+	background-size: 200px 100px;
+	background-repeat:repeat-x;
+	background-position: 0 bottom;
+	border-right: 5px solid #A1A1A1;
+	border-left: 5px solid #A1A1A1;
+	border-bottom: 5px solid #A1A1A1;
+	border-radius: 4px;
+	opacity:1;
+	display: block;
+}
+
+.bucket p {
+	position: relative;
+	color: #FC7703;
+	text-align: center;
+	font-family: 'Cabin Condensed', sans-serif;
+	font-size: 30px;
+	margin: 0;
+}
+ul {
+	list-style-type: none;
+	float: left;
+	padding-left: 0;
+	margin: 0 auto;
+}
+li {
+	margin: 5px;
+	display: inline-block;
+}
+.history {
+	height: 70%;
+	overflow: auto;
+	clear: both;
+}
+#target {
+	font-size: 80px;
+	letter-spacing: 3px;
+	position: absolute;
+	bottom: 40px;
+	right: 12%;
+	opacity: .5;
+}
+button {
+	font-family: 'Cabin Condensed', sans-serif;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	color: #454545;
+	background: none;
+	border: 1px solid #dadada;
+	border-radius: 10px;
+}
+button:hover {
+	outline: none;
+	border-color: #9ecaed;
+	box-shadow: 0 0 10px #9ecaed;
+	background: white;
+}
+#buttonWrapper {
+	float: left;
+	margin-left: 50px;
+	margin-top: 30px;
+}
+#changeSizes, #show_hints {
+	padding: 20px;
+	border-radius: 30px;
+	background: white;
+	font-weight: bold;
+	color: #39a7ec;
+	border: 2px solid #CFD1D0;
+	font-size: 30px;
+	display: inline-block;
+}
+#show_hints {
+	margin-right: 20px;
+}

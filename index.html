@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en" ng-app>
+<head>
+	<meta charset="UTF-8">
+	<title>Document</title>
+	<script src="https://cdn.jsdelivr.net/snap.svg/0.2.0/snap.svg-min.js"></script> 
+	<link href='http://fonts.googleapis.com/css?family=Cabin+Condensed:700' rel='stylesheet' type='text/css'>
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+ 	<section id="b1Wrapper">
+ 		<div id="b1" class="bucket"><p>0/</p></div>
+ 		<ul>
+ 			<li><button class="fill move">Fill</button></li>
+ 			<li><button class="transfer move">Transfer</button></li>
+ 			<li><button class="empty move">Empty</button></li>
+ 		</ul>
+ 		<div class="history"></div>
+ 	</section>
+ 	<section id="b2Wrapper">
+ 	<div id="b2" class="bucket"><p>0/</p></div>
+ 		<ul>
+ 			<li><button class="fill move">Fill</button></li>
+ 			<li><button class="transfer move">Transfer</button></li>
+ 			<li><button class="empty move">Empty</button></li>
+ 		</ul>
+ 		<div class="history"></div>
+ 	</section>
+ 	<div id="buttonWrapper">
+ 		<button id="show_hints">Show Hints</button>
+ 		<button id="changeSizes">Change Bucket Sizes</button>
+ 	</div>
+	<!-- <p id="notPossible"></p> -->
+ 	<div id="target" class="top-right">Target: <span>4</span> Gallons</div>
+
+<script>
+	var s = Snap(600,400);
+	var aspect_ratio = 822/567;
+	var lake = s.image("imgs/lake-figure-color.svg", 0, 0, 600, (600/aspect_ratio));
+	var current_height = 400/aspect_ratio;
+	var scale_factor = 1.2;
+	var translateX = -(1.2*400-400)/2;
+	var translateY = -(1.2*current_height-current_height)/2;
+	var m = new Snap.Matrix();
+	var b1CurrentHeight = b2CurrentHeight = 0;
+	var b1Element = document.getElementById("b1"), b2Element = document.getElementById("b2");
+	var targetSpan = document.getElementById("target").firstElementChild;
+	var show_hints = document.getElementById("show_hints");
+	var hintmode = false, hintSteps, section = null;
+
+	var buckets = { 
+		"b1": {"elem": b1Element, "size": 5}, 
+	  "b2": {"elem": b2Element, "size": 3},
+	  "requiredGallons": 4
+	};
+	Object.defineProperty(buckets.b1, "currentHeight", {
+		get: function() { return b1CurrentHeight; },
+		set: function(newVal) { 
+			b1CurrentHeight = newVal;
+			updateBuckets.call(this, 0);
+		}
+	});
+	Object.defineProperty(buckets.b2, "currentHeight", {
+		get: function() { return b2CurrentHeight; },
+		set: function(newVal) { 
+			b2CurrentHeight = newVal;
+			updateBuckets.call(this, 0);
+		}
+	});
+ 	var step = {
+		"count": 0,
+		"check": function(h1, h2) {
+			this.count += 1;
+			return h1 == buckets.requiredGallons
+					|| h2 == buckets.requiredGallons
+					|| h2 + h1 == buckets.requiredGallons;
+		}
+	}
+	setup(buckets.b1.size, buckets.b2.size);
+
+	function setup(size1, size2) {
+		section = null;
+		var larger = Math.max(size1, size2);
+		var smaller = size1 == larger ? size2 : size1; 
+		buckets.b1.size = larger;
+		buckets.b2.size = smaller;
+		buckets.maxBucketHeight = larger;
+		buckets.b1.currentHeight = 0;
+		buckets.b2.currentHeight = 0;
+		updateBuckets.call(buckets.b1, 1);
+		updateBuckets.call(buckets.b2, 1);
+		b1Element.style.backgroundSize = "200px " + 5 + "px";
+		b2Element.style.backgroundSize = "200px " + 5 + "px";
+		var newHeight = smaller/larger*100;
+		if (newHeight < 30) {
+			b2Element.style.height = "30px";
+			b2Element.style.marginTop = "75px";
+		} else {
+			b2Element.style.height = newHeight + "px";
+			b2Element.style.marginTop = 105 - smaller/larger*100 + "px";
+		}
+		step.count = 0;
+	}
+
+	function animateLake(resize) {
+		if (resize == "shrink") {
+			m.scale(1/1.2, 1/1.2, 0, 0);
+			m.translate(-translateX, -translateY);
+		} else {
+			m.scale(1.2, 1.2, 0, 0);
+			m.translate(translateX, translateY);
+		}
+		lake.animate({ "transform": m }, 1500);
+	}
+
+	function trial(h1, h2, target) {
+		var hght1 = hght2 = 0, change, alotted;
+		var newStep = clone(step);
+		newStep.count = 0;
+		var stepArr = [];
+		while (!newStep.check(hght1, hght2) && newStep.count < 50) {
+			if (hght1 == 0) {
+				hght1 = h1;
+				stepArr.push({"step": "fill", "state": [hght1, hght2]});
+			} else if (hght1 == h1
+				|| hght2 == 0) {
+				alotted = h2 - hght2;
+				change =  hght1 > alotted ? alotted : hght1;
+				hght2 += change;
+				hght1 -= change;
+				stepArr.push({"step": "transfer", "state": [hght1, hght2]});
+			} else if (hght2 == h2) {
+				hght2 = 0;
+				stepArr.push({"step": "empty", "state": [hght1, hght2]});
+			}
+		}
+		return { "count": newStep.count - 1, "steps": stepArr};
+	}
+	function whichElement(id) {
+		return id == "b1" ? b1Element : b2Element;
+	}
+	function fill(bucket, id) {
+		animateBucket(whichElement(id), heightScale(bucket.currentHeight), heightScale(bucket.size));
+		animateLake("shrink");
+		bucket.currentHeight = bucket.size;
+	}
+	function transfer(from, to, id) {
+		var alotted = to.size - to.currentHeight;
+		var desired = from.currentHeight;
+		var transfer_amount = desired > alotted ? alotted : desired;
+		animateBucket(whichElement(id), heightScale(from.currentHeight), heightScale(from.currentHeight - transfer_amount));
+		animateBucket(whichElement(id == "b1" ? "b2" : "b1"), heightScale(to.currentHeight), heightScale(to.currentHeight + transfer_amount));
+		from.currentHeight -= transfer_amount;
+		to.currentHeight += transfer_amount;
+	}
+	function empty(bucket, id) {
+		animateBucket(whichElement(id), heightScale(bucket.currentHeight), 5);
+		animateLake("grow");
+		bucket.currentHeight = 0;
+	}
+	function updateBuckets(n) {
+		var split = this.elem.firstElementChild.innerHTML.split("/");
+		split[n] = n == 0 ? this.currentHeight : this.size;
+		this.elem.firstElementChild.innerHTML = split.join("/");
+	}
+	var animation_one_in_progress = 0, currentTickb1;
+	var animation_two_in_progress = 0, currentTickb2;
+
+	function animateBucket(elem, from, to) {
+		var anim, animation_in_progress;
+		var tick = function() {
+			return setInterval(function() { move(anim, animation_in_progress) }, 30);
+		};
+		if (elem.id == "b1") {
+			if (animation_one_in_progress) {
+				clearTimeout(currentTickb1);
+				setFrom();
+			} else { 
+				++animation_one_in_progress; 
+			}
+			currentTickb1 = tick();
+			// order matters here. despite it not being intuitive currentTick has to be defined, then after the timeout runs, anim is defined
+			anim = currentTickb1, animation_in_progress = animation_one_in_progress;
+		} else {
+			if (animation_two_in_progress) {
+				clearTimeout(currentTickb2);
+				setFrom();
+			} else { 
+				++animation_two_in_progress; 
+			}
+			currentTickb2 = tick();
+			anim = currentTickb2, animation_in_progress = animation_two_in_progress;
+		}
+		if (to == 0) to = 5; 
+		var increment = (to-from)/50; 
+		var tickCount = 0;
+		function setFrom() {
+			from = +getComputedStyle(elem, null).backgroundSize.split(" ")[1].replace("px", "");
+		}
+		function move(anim, anim_in_prog) {
+			++tickCount;
+			var tickCrement = increment * tickCount;
+			elem.style.backgroundSize = "200px " + (from + tickCrement) + "px";
+			if (Math.abs(tickCrement) >= Math.abs(to-from)) { 
+				--anim_in_prog; 
+				clearTimeout(anim); 
+			}
+		}	
+	}
+	function hintMode() {
+		var steps, emptying, currentInd;
+		if (!hintSteps) {
+			var startWithOne = trial(buckets.b1.size, buckets.b2.size, buckets.requiredGallons);
+			var startWithTwo = trial(buckets.b2.size, buckets.b1.size, buckets.requiredGallons);
+			var indexOne = currentIndex(startWithOne.steps, 0, 1);
+			var indexTwo = currentIndex(startWithTwo.steps, 1, 0);
+			var remainingSteps1 = startWithOne.count - indexOne;
+			var remainingSteps2 = startWithTwo.count - indexTwo;
+			if (remainingSteps1 <= remainingSteps2) {
+					currentInd = indexOne;
+					steps = startWithOne.steps;
+					section = "b1Wrapper";
+				} else {
+					currentInd = indexTwo;
+					steps = startWithTwo.steps;
+					section = 'b2Wrapper';
+			}
+			if (currentInd < 0) { 
+				hintSteps = steps.slice(0);
+				hintSteps.unshift({"step": "empty"});
+			} else {
+				hintSteps = steps.slice(currentInd);
+			}
+			hideOrShowAll(0);
+			setActiveElem(currentElem());
+		} else {
+			if (hintmode) {
+				hideOrShowAll(1);
+				unsetActiveElem();
+			} else {
+				hideOrShowAll(0);
+				setActiveElem(currentElem());
+			}
+		}
+		toggleHintMode();
+	}
+	function toggleHintMode() {
+		hintmode = hintmode == false ? true : false;
+	}
+	function setActiveElem(elem) {
+		elem.style.opacity = 1;
+		elem.className = elem.className + " active";
+	}
+	function unsetActiveElem() {
+		var elem = document.getElementsByClassName("active")[0];
+		if (elem) elem.className = elem.className.replace(" active", "");
+	}
+	function currentIndex(steps, n, n2) {
+		for (var i = steps.length - 1; i >= 0; i--) {
+			if (steps[i].state[n] == buckets.b1.currentHeight && steps[i].state[n2] == buckets.b2.currentHeight) {
+				return i+1;
+			}
+		}
+		return buckets.b1.currentHeight == 0 && buckets.b2.currentHeight == 0 ? 0 : -1;
+	}
+	function swapSection(section) {
+		return section == "b1Wrapper" ? "b2Wrapper" : "b1Wrapper";
+	}
+	function emptying() {
+		return hintSteps[0].step == "empty";
+	}
+
+	function hideExcept() {
+		if (hintmode) {
+			if (emptying()) swapSection();
+			var active = document.getElementsByClassName("active")[0];
+			unsetActiveElem();
+			active.style.opacity = 0;
+			setActiveElem(currentElem());
+		}
+	}
+	function hideOrShowAll(n) {
+		var nodes = Array.prototype.slice.call(document.getElementsByClassName("move"));
+		nodes.forEach(function(node) { node.style.opacity = n;});
+	}
+	function currentElem() {
+		var sect = section;
+		if (emptying()) sect = swapSection(section); 
+		return document.getElementById(sect).getElementsByClassName(hintSteps[0].step)[0];
+	}
+	// click events
+	show_hints.onclick = function() {
+		var greatestCF = gcd(buckets.b1.size, buckets.b2.size);
+		if (buckets.requiredGallons % greatestCF != 0) {
+			alert("This is not possible because " + greatestCF + " is the highest common factor of both " + buckets.b1.size + " and " + buckets.b2.size + ", but " + greatestCF + " is not a factor of " + buckets.requiredGallons + "!");
+		} else { hintMode(); }
+	};
+
+	(function(){
+		for (var i = 0; i < 2; i++) {
+			document.getElementsByTagName("ul")[i].onclick = makeMove;
+		}
+	})();
+
+	function makeMove(e) {
+		if (e.target.tagName == "BUTTON") {
+			var bucket = e.target.parentNode.parentNode.parentNode.children[0].id;
+			var action = e.target.className.split(" ")[0];
+			// if our functions were not in window, and we didn't want to use eval we'd do this with a switch statement.  
+			var fn = window[action];
+			if (typeof fn === "function") { 
+				if (action === "transfer") {
+					fn(buckets[bucket], buckets[bucket === "b1" ? "b2" : "b1"], bucket);
+				} else {
+					fn(buckets[bucket], bucket);
+				}
+			}
+			stepHistory();
+			if (step.check(buckets.b1.currentHeight, buckets.b2.currentHeight)) { 
+				alert("You did it in " + step.count + " steps!"); 
+			} else {
+				if (hintmode) { hintSteps.shift(); hideExcept(); }
+			}
+		}
+	}
+	var historyElems = document.getElementsByClassName("history");
+	function stepHistory() {
+		var p1 = document.createElement("p");
+		var p2 = document.createElement("p");
+		p1.innerHTML = buckets.b1.currentHeight;
+		p2.innerHTML = buckets.b2.currentHeight;
+		historyElems[0].appendChild(p1);
+		historyElems[1].appendChild(p2);
+	}
+	document.getElementById("changeSizes").onclick = function() {
+		var rand1 = Math.random()*50|0;
+		var rand2 = Math.random()*50|0;
+		setup(rand1, rand2);
+		var newTarget = (rand1 + rand2-1)*Math.random()|0;
+		targetSpan.innerHTML = newTarget;
+		buckets.requiredGallons = newTarget;
+		historyElems[0].innerHTML = "";
+		historyElems[1].innerHTML = "";
+		hintSteps = null;
+		if (hintmode) { hideOrShowAll(1); hintmode = false; };
+		unsetActiveElem();
+	}
+// helpers
+	function gcd(a, b) {
+	    if ( ! b) return a; 
+	    return gcd(b, a % b);
+	};
+	function clone(obj) {
+   var target = {};
+   for (var i in obj) {
+    if (obj.hasOwnProperty(i)) {
+     target[i] = obj[i];
+    }
+   }
+   return target;
+  }
+  function heightScale(Height) {
+  	return ~~((Height/buckets.maxBucketHeight)*135);
+  }
+
+</script>
+</body>
+</html>
+
