@@ -34,19 +34,20 @@
  	<div id="target" class="top-right">Target: <span>4</span> Gallons</div>
 
 <script>
-	var s = Snap(600,400);
-	var aspect_ratio = 822/567;
-	var lake = s.image("imgs/lake-figure-color.svg", 0, 0, 600, (600/aspect_ratio));
-	var current_height = 400/aspect_ratio;
-	var scale_factor = 1.2;
-	var translateX = -(1.2*400-400)/2;
-	var translateY = -(1.2*current_height-current_height)/2;
-	var m = new Snap.Matrix();
-	var b1CurrentHeight = b2CurrentHeight = 0;
-	var b1Element = document.getElementById("b1"), b2Element = document.getElementById("b2");
-	var targetSpan = document.getElementById("target").firstElementChild;
-	var show_hints = document.getElementById("show_hints");
-	var hintmode = false, hintSteps, section = null;
+	var s = Snap(600,400),
+			aspect_ratio = 822/567,
+			lake = s.image("imgs/lake-figure-color.svg", 0, 0, 600, (600/aspect_ratio)),
+			current_height = 400/aspect_ratio,
+			scale_factor = 1.2,
+			translateX = -(1.2*400-400)/2,
+			translateY = -(1.2*current_height-current_height)/2,
+			m = new Snap.Matrix(),
+			b1CurrentHeight = b2CurrentHeight = 0,
+			b1Element = document.getElementById("b1"), 
+			b2Element = document.getElementById("b2"),
+			targetSpan = document.getElementById("target").firstElementChild,
+			show_hints = document.getElementById("show_hints"),
+			hintmode = false, hintSteps, section = null;
 
 	var buckets = { 
 		"b1": {"elem": b1Element, "size": 5}, 
