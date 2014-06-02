@@ -257,23 +257,19 @@ Game.prototype = function() {
 						section = 'b2Wrapper';
 				}
 				hintSteps = steps.slice(0);
-				console.log(currentInd);
 				setCurrentStep(currentInd, steps);
-				hideOrShowAll(0);
-				setNewActiveElem(currentElem());
+		
 			} else {
 				// we know the fastest path, we just have to see where we are at on that path.
 				if (section == 'b1Wrapper') {
 					setCurrentStep(currentIndex(hintSteps, 0, 1));
-					hideOrShowAll(0);
-					setNewActiveElem(currentElem());
 				} else {
 					setCurrentStep(currentIndex(hintSteps, 1, 0));
-					hideOrShowAll(0);
-					setNewActiveElem(currentElem());
 				}
 			}
 		}
+		hideOrShowAll(0);
+		setNewActiveElem(currentElem());
 		toggleHintMode();
 	},
 	setCurrentStep = function(currentInd) {
