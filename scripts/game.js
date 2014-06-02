@@ -66,6 +66,7 @@ Game.prototype = function() {
 		buckets.b2.currentHeight = 0;
 		g.updateBuckets.call(buckets.b1, 1);
 		g.updateBuckets.call(buckets.b2, 1);
+		console.log(b1Element, b2Element);
 		b1Element.style.backgroundSize = "200px " + 5 + "px";
 		b2Element.style.backgroundSize = "200px " + 5 + "px";
 		if (newHeight < 30) {
@@ -88,14 +89,18 @@ Game.prototype = function() {
 	},
 	newActiveElem = function() {
 		unsetActiveElem();
+		hideActiveElem();
 		setNewActiveElem(currentElem());
 	},
 	unsetActiveElem = function() {
 		var elem = document.getElementsByClassName("active")[0];
 		if (elem) { 
 			elem.className = elem.className.replace(" active", "");
-			elem.style.opacity = 0;
 		}
+	},
+	hideElem = function() {
+		var elem = document.getElementsByClassName("active")[0];
+		elem.style.opacity = 0;
 	},
 	setNewActiveElem = function(elem) {
 		elem.style.opacity = 1;
@@ -118,7 +123,6 @@ Game.prototype = function() {
 		setup(rand1, rand2, g);
   },
 // *=*=*=*=*=*=*=*=*=*=*=*=  everything related to making a move =*=*=*=*=*=*=*=*=*=*=*=*
-
 	makeMove = function(e) {
 		if (e.target.tagName == "BUTTON") {
 			var bucket = e.target.parentNode.parentNode.parentNode.children[0].id;
@@ -243,6 +247,7 @@ Game.prototype = function() {
 				var remainingSteps1 = startWithOne.count - indexOne;
 				var remainingSteps2 = startWithTwo.count - indexTwo;
 				if (remainingSteps1 <= remainingSteps2) {
+					console.log("true");
 						currentInd = indexOne;
 						steps = startWithOne.steps;
 						section = "b1Wrapper";
@@ -252,6 +257,7 @@ Game.prototype = function() {
 						section = 'b2Wrapper';
 				}
 				hintSteps = steps.slice(0);
+				console.log(currentInd);
 				setCurrentStep(currentInd, steps);
 				hideOrShowAll(0);
 				setNewActiveElem(currentElem());
@@ -319,12 +325,13 @@ Game.prototype = function() {
 				return i+1;
 			}
 		}
-		buckets.b1.currentHeight == 0 && buckets.b2.currentHeight == 0 ? 0 : -1;
+		return buckets.b1.currentHeight == 0 && buckets.b2.currentHeight == 0 ? 0 : -1;
 	},
 	swapSection = function(section) {
 		return section == "b1Wrapper" ? "b2Wrapper" : "b1Wrapper";
 	},
 	emptying = function() {
+		console.log(hintSteps, currentStep);
 		return hintSteps[currentStep].step == "empty";
 	},
 	currentElem = function() {
