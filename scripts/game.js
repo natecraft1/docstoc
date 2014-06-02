@@ -66,7 +66,6 @@ Game.prototype = function() {
 		buckets.b2.currentHeight = 0;
 		g.updateBuckets.call(buckets.b1, 1);
 		g.updateBuckets.call(buckets.b2, 1);
-		console.log(b1Element, b2Element);
 		b1Element.style.backgroundSize = "200px " + 5 + "px";
 		b2Element.style.backgroundSize = "200px " + 5 + "px";
 		if (newHeight < 30) {
@@ -88,8 +87,8 @@ Game.prototype = function() {
 		nodes.forEach(function(node) { node.style.opacity = n;});
 	},
 	newActiveElem = function() {
-		unsetActiveElem();
 		hideActiveElem();
+		unsetActiveElem();
 		setNewActiveElem(currentElem());
 	},
 	unsetActiveElem = function() {
@@ -98,17 +97,19 @@ Game.prototype = function() {
 			elem.className = elem.className.replace(" active", "");
 		}
 	},
-	hideElem = function() {
+	hideActiveElem = function() {
 		var elem = document.getElementsByClassName("active")[0];
-		elem.style.opacity = 0;
+		if (elem) elem.style.opacity = 0;
 	},
 	setNewActiveElem = function(elem) {
 		elem.style.opacity = 1;
 		elem.className = elem.className + " active";
 	},
 	correctMove = function() {
-		return hintSteps[currentStep].state[0] == buckets.b1.currentHeight 
-				&& hintSteps[currentStep].state[1] == buckets.b2.currentHeight;
+		var n1 = 0, n2 = 1;
+		if (section == "b2Wrapper") { n1 = 1; n2 = 0; };
+		return hintSteps[currentStep].state[n1] == buckets.b1.currentHeight 
+				&& hintSteps[currentStep].state[n2] == buckets.b2.currentHeight;
 	},
 	changeSizes = function() {
 		var rand1 = Math.random()*50|0,
@@ -143,8 +144,7 @@ Game.prototype = function() {
 			if (step.check(buckets.b1.currentHeight, buckets.b2.currentHeight)) { 
 				alert("You did it in " + step.count + " steps!"); 
 			} else {
-				if (hintSteps && correctMove()) { ++currentStep; }
-
+				if (hintSteps && correctMove()) { ++currentStep; console.log(hintSteps, currentStep); console.log(true); }
 				if (hintmode) { 
 					newActiveElem(); 
 				}
@@ -234,43 +234,42 @@ Game.prototype = function() {
 	},
 	// *=*=*=*=*=*=*=*=*=*=*=*=  Show Hints =*=*=*=*=*=*=*=*=*=*=*=*
 	hintMode = function() {
-		var steps, emptying, currentInd;
+		var steps, currentInd;
 		if (hintmode) {
 			unsetActiveElem();
 			hideOrShowAll(1);
-		} else {
-			if (!hintSteps) {
-				var startWithOne = trial(buckets.b1.size, buckets.b2.size, buckets.requiredGallons);
-				var startWithTwo = trial(buckets.b2.size, buckets.b1.size, buckets.requiredGallons);
-				var indexOne = currentIndex(startWithOne.steps, 0, 1);
-				var indexTwo = currentIndex(startWithTwo.steps, 1, 0);
-				var remainingSteps1 = startWithOne.count - indexOne;
-				var remainingSteps2 = startWithTwo.count - indexTwo;
-				if (remainingSteps1 <= remainingSteps2) {
-					console.log("true");
-						currentInd = indexOne;
-						steps = startWithOne.steps;
-						section = "b1Wrapper";
-					} else {
-						currentInd = indexTwo;
-						steps = startWithTwo.steps;
-						section = 'b2Wrapper';
-				}
-				hintSteps = steps.slice(0);
-				setCurrentStep(currentInd, steps);
-		
-			} else {
-				// we know the fastest path, we just have to see where we are at on that path.
-				if (section == 'b1Wrapper') {
-					setCurrentStep(currentIndex(hintSteps, 0, 1));
-				} else {
-					setCurrentStep(currentIndex(hintSteps, 1, 0));
-				}
-			}
 		}
+
+		if (!hintmode && ! hintSteps) {
+			var startWithOne = trial(buckets.b1.size, buckets.b2.size, buckets.requiredGallons)
+					,startWithTwo = trial(buckets.b2.size, buckets.b1.size, buckets.requiredGallons)
+					,indexOne = currentIndex(startWithOne.steps, 0, 1)
+					,indexTwo = currentIndex(startWithTwo.steps, 1, 0)
+					,remainingSteps1 = startWithOne.count - indexOne
+					,remainingSteps2 = startWithTwo.count - indexTwo;
+
+			var opts = setBestPath(remainingSteps1, remainingSteps2, indexOne, indexTwo, startWithOne, startWithTwo);
+			steps = opts.steps, currentInd = opts.ind;
+			hintSteps = steps.slice(0);
+			setCurrentStep(currentInd, steps);
+		}
+
 		hideOrShowAll(0);
 		setNewActiveElem(currentElem());
 		toggleHintMode();
+	},
+	setBestPath = function(remaining1, remaining2, indexOne, indexTwo, startWithOne, startWithTwo) {
+		var ind, steps;
+		if (remaining1 <= remaining2) {
+			section = "b1Wrapper";
+			ind = indexOne;
+			steps = startWithOne.steps;
+		} else {
+			section = 'b2Wrapper';
+			ind = indexTwo;
+			steps = startWithTwo.steps;
+		}
+		return { "ind": ind, "steps": steps };
 	},
 	setCurrentStep = function(currentInd) {
 		if (currentInd < 0) { 
@@ -327,7 +326,6 @@ Game.prototype = function() {
 		return section == "b1Wrapper" ? "b2Wrapper" : "b1Wrapper";
 	},
 	emptying = function() {
-		console.log(hintSteps, currentStep);
 		return hintSteps[currentStep].step == "empty";
 	},
 	currentElem = function() {
