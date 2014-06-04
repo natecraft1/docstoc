@@ -14,9 +14,10 @@ var Game = function(size1,size2,target) {
 			},
 			b1CurrentHeight = b2CurrentHeight = 0, 
 			hintmode = false, hintSteps, lakeFull = true,
-			section = null, currentStep = 0,
+			section = null, currentStep = 0, needToReCalculateShortestPath = true,
 			animation_one_in_progress = 0, currentTickb1,
 			animation_two_in_progress = 0, currentTickb2,
+			shortestPathMemo = {},
 			step = {
 				"count": 0,
 				"check": function(h1, h2) {
@@ -36,7 +37,6 @@ function Game() {
 		split[n] = n == 0 ? this.currentHeight : this.size;
 		this.elem.firstElementChild.innerHTML = split.join("/");
 	};
-	this.setup(buckets.b1.size, buckets.b2.size);
 	Object.defineProperty(buckets.b1, "currentHeight", {
 		get: function() { return b1CurrentHeight; },
 		set: function(newVal) { 
@@ -51,6 +51,8 @@ function Game() {
 			that.updateBuckets.call(this, 0);
 		}
 	});
+	this.setup(buckets.b1.size, buckets.b2.size);
+
 }
 Game.prototype = function() {
 	var setup = function(size1, size2, g) {
@@ -66,8 +68,8 @@ Game.prototype = function() {
 		buckets.b2.currentHeight = 0;
 		g.updateBuckets.call(buckets.b1, 1);
 		g.updateBuckets.call(buckets.b2, 1);
-		b1Element.style.backgroundSize = "200px " + 5 + "px";
-		b2Element.style.backgroundSize = "200px " + 5 + "px";
+		b1Element.style.backgroundSize = "200px 5px";
+		b2Element.style.backgroundSize = "200px 5px";
 		if (newHeight < 30) {
 			b2Element.style.height = "30px";
 			b2Element.style.marginTop = "75px";
@@ -80,11 +82,8 @@ Game.prototype = function() {
 	},
 	// *=*=*=*=*=*=*=*=*=*=*=*=  Everything related to managing states of the game =*=*=*=*=*=*=*=*=*=*=*=*
 	
-	// when the currentHeight's change, the numerator of the buckets changes, 
-	// and when we change the size of the buckets, the denominator changes.
-	
 	hideOrShowAll = function(n) {
-		nodes.forEach(function(node) { node.style.opacity = n;});
+		nodes.forEach(function(node) { node.style.opacity = n; });
 	},
 	newActiveElem = function() {
 		hideActiveElem();
@@ -106,12 +105,11 @@ Game.prototype = function() {
 		elem.className = elem.className + " active";
 	},
 	correctMove = function() {
-		var n1 = 0, n2 = 1;
-		if (section == "b2Wrapper") { n1 = 1; n2 = 0; };
-		return hintSteps[currentStep].state[n1] == buckets.b1.currentHeight 
-				&& hintSteps[currentStep].state[n2] == buckets.b2.currentHeight;
+		if (!hintSteps) return false;
+		return hintSteps[currentStep].state[0] == buckets.b1.currentHeight 
+				&& hintSteps[currentStep].state[1] == buckets.b2.currentHeight;
 	},
-	changeSizes = function() {
+	changeBucketSizes = function() {
 		var rand1 = Math.random()*50|0,
 				rand2 = Math.random()*50|0;
 		var newTarget = (rand1 + rand2-1)*Math.random()|0;
@@ -120,6 +118,9 @@ Game.prototype = function() {
 		historyElems[0].innerHTML = "";
 		historyElems[1].innerHTML = "";
 		hintSteps = null;
+		currentStep = 0;
+		needToReCalculateShortestPath = true;
+		shortestPathMemo = {};
 		if (hintmode) { hideOrShowAll(1); hintmode = false; };
 		setup(rand1, rand2, g);
   },
@@ -144,12 +145,15 @@ Game.prototype = function() {
 			if (step.check(buckets.b1.currentHeight, buckets.b2.currentHeight)) { 
 				alert("You did it in " + step.count + " steps!"); 
 			} else {
-				if (hintSteps && correctMove()) { ++currentStep; console.log(hintSteps, currentStep); console.log(true); }
+				var goodMove = correctMove();
+				if (hintSteps && goodMove) { ++currentStep; }
+				if (!goodMove) { needToReCalculateShortestPath = true; }
 				if (hintmode) { 
 					newActiveElem(); 
 				}
 			}
 		}
+		console.log(hintSteps, currentStep);
 	},
 	fill = function(bucket, id) {
 		animateBucket(whichElement(id), heightScale(bucket.currentHeight), heightScale(bucket.size));
@@ -233,74 +237,88 @@ Game.prototype = function() {
 		}	
 	},
 	// *=*=*=*=*=*=*=*=*=*=*=*=  Show Hints =*=*=*=*=*=*=*=*=*=*=*=*
+
 	hintMode = function() {
 		var steps, currentInd;
 		if (hintmode) {
 			unsetActiveElem();
 			hideOrShowAll(1);
+			toggleHintMode();
+			return;
 		}
-
-		if (!hintmode && ! hintSteps) {
-			var startWithOne = trial(buckets.b1.size, buckets.b2.size, buckets.requiredGallons)
-					,startWithTwo = trial(buckets.b2.size, buckets.b1.size, buckets.requiredGallons)
-					,indexOne = currentIndex(startWithOne.steps, 0, 1)
-					,indexTwo = currentIndex(startWithTwo.steps, 1, 0)
+// we need to recalculate the shortest path whenever we haven't clicked "Show Hints yet"
+// or when we have clicked it, and somewhere along the way we made a sadly horrible move && life decision
+		if (needToReCalculateShortestPath) {
+			needToReCalculateShortestPath = false;
+			var startWithOne = trial(buckets.b1.size, buckets.b2.size, buckets.requiredGallons, true)
+					,startWithTwo = trial(buckets.b2.size, buckets.b1.size, buckets.requiredGallons, false)
+					,indexOne = currentIndex(startWithOne.steps)
+					,indexTwo = currentIndex(startWithTwo.steps)
 					,remainingSteps1 = startWithOne.count - indexOne
 					,remainingSteps2 = startWithTwo.count - indexTwo;
 
-			var opts = setBestPath(remainingSteps1, remainingSteps2, indexOne, indexTwo, startWithOne, startWithTwo);
-			steps = opts.steps, currentInd = opts.ind;
+			var pathOptions = bestPath(remainingSteps1, remainingSteps2, indexOne, indexTwo, startWithOne, startWithTwo);
+			steps = pathOptions.steps, currentInd = pathOptions.ind;
 			hintSteps = steps.slice(0);
-			setCurrentStep(currentInd, steps);
+			cachePath(pathOptions);
+			setCurrentStep(currentInd);
 		}
-
 		hideOrShowAll(0);
 		setNewActiveElem(currentElem());
 		toggleHintMode();
 	},
-	setBestPath = function(remaining1, remaining2, indexOne, indexTwo, startWithOne, startWithTwo) {
-		var ind, steps;
+	cachePath = function() {
+		var bucketHeights = [buckets.b1.currentHeight, buckets.b2.currentHeight];
+		shortestPathMemo[JSON.stringify(bucketHeights)] = pathOptions;
+	},
+	bestPath = function(remaining1, remaining2, indexOne, indexTwo, startWithOne, startWithTwo) {
 		if (remaining1 <= remaining2) {
-			section = "b1Wrapper";
-			ind = indexOne;
-			steps = startWithOne.steps;
+			return setBestPath("b1Wrapper", indexOne, startWithOne.steps);
 		} else {
-			section = 'b2Wrapper';
-			ind = indexTwo;
-			steps = startWithTwo.steps;
+			return setBestPath("b2Wrapper", indexTwo, startWithTwo.steps);
 		}
-		return { "ind": ind, "steps": steps };
+	},
+	setBestPath = function(section, index, steps) {
+		section = section;
+		return { "ind": index, "steps": steps };
 	},
 	setCurrentStep = function(currentInd) {
-		if (currentInd < 0) { 
+		if (currentInd == -1) { 
 			currentStep = 0;
 			hintSteps.unshift({"step": "empty", "state": [0,0]});
+		} else if (currentInd == 0) {
+			currentStep = 0;
 		} else {
 			currentStep = currentInd;
 		}
 	},
-	trial = function(h1, h2, target) {
-		var hght1 = hght2 = 0, change, alotted;
+	trial = function(h1, h2, target, bucketOne) {
+		var hght1 = hght2 = 0, change, alotted, action;
 		var newStep = clone(step);
 		newStep.count = 0;
 		var stepArr = [];
 		while (!newStep.check(hght1, hght2) && newStep.count < 50) {
 			if (hght1 == 0) {
 				hght1 = h1;
-				stepArr.push({"step": "fill", "state": [hght1, hght2]});
+				action = "fill";
 			} else if (hght1 == h1
 				|| hght2 == 0) {
+				action = "transfer";
 				alotted = h2 - hght2;
 				change =  hght1 > alotted ? alotted : hght1;
 				hght2 += change;
 				hght1 -= change;
-				stepArr.push({"step": "transfer", "state": [hght1, hght2]});
 			} else if (hght2 == h2) {
+				action = "empty";
 				hght2 = 0;
-				stepArr.push({"step": "empty", "state": [hght1, hght2]});
+			}
+			if (bucketOne) {
+				stepArr.push({"step": action, "state": [hght1, hght2]});
+			} else {
+				stepArr.push({"step": action, "state": [hght2, hght1] });
 			}
 		}
-		return { "count": newStep.count - 1, "steps": stepArr};
+		return { "count": newStep.count - 1, "steps": stepArr };
 	},
 
 	// *=*=*=*=*=*=*=*=*=*=*=*=  helpers =*=*=*=*=*=*=*=*=*=*=*=*
@@ -311,16 +329,21 @@ Game.prototype = function() {
 		hintmode = hintmode == false ? true : false;
 	},
 	currentIndex = function(steps, n, n2) {
+		var b1h = buckets.b1.currentHeight, b2h = buckets.b2.currentHeight;
 		// current index is called when a user clicks on Show Hints, 
 		// and we need to figure out what step we are currently on in order to find out 
 		// what the quickest way of finishing is. 
 		for (var i = steps.length - 1; i >= 0; i--) {
-			if (steps[i].state[n] == buckets.b1.currentHeight 
-			 && steps[i].state[n2] == buckets.b2.currentHeight) {
+			if (steps[i].state[0] == b1h 
+			 && steps[i].state[1] == b2h) {
 				return i+1;
 			}
 		}
-		return buckets.b1.currentHeight == 0 && buckets.b2.currentHeight == 0 ? 0 : -1;
+		if (b1h + b2h == 0) { 
+			return 0; 
+		} else if (b1h == buckets.b1.size && b2h == buckets.b2.size) {
+			return -2;
+		} else { return -1 };
 	},
 	swapSection = function(section) {
 		return section == "b1Wrapper" ? "b2Wrapper" : "b1Wrapper";
@@ -353,7 +376,7 @@ Game.prototype = function() {
   	for (var i = 0; i < 2; i++) {
   		uls[i].addEventListener("click", makeMove, false);
   	}
-  	changeSizesButton.addEventListener("click", changeSizes, false);
+  	changeSizesButton.addEventListener("click", changeBucketSizes, false);
   	show_hints.addEventListener("click", function() {
 			var greatestCF = gcd(buckets.b1.size, buckets.b2.size);
 			if (buckets.requiredGallons % greatestCF != 0) {
