@@ -1,4 +1,6 @@
 var Game = function(size1,size2,target) {
+	// these are our Game variables that will be accessible to all of the functions within game
+	// DOM ELEMENTS
 	var b1Element = document.getElementById("b1"), 
 			b2Element = document.getElementById("b2"),
 			targetSpan = document.getElementById("target").firstElementChild,
@@ -7,17 +9,14 @@ var Game = function(size1,size2,target) {
 			historyElems = document.getElementsByClassName("history"),
 			changeSizesButton = document.getElementById("changeSizes"),
 			uls = document.getElementsByTagName("ul"),
+	// BUCKETS
 			buckets = { 
 				"b1": {"size": size1, "elem": b1Element }, 
 			  "b2": {"size": size2,  "elem": b2Element },
 			  "requiredGallons": target
 			},
 			b1CurrentHeight = b2CurrentHeight = 0, 
-			hintmode = false, hintSteps, lakeFull = true,
-			section = null, currentStep = 0, needToCalculateShortestPath = true,
-			animation_one_in_progress = 0, currentTickb1,
-			animation_two_in_progress = 0, currentTickb2,
-			shortestPathMemo = {},
+			// tracks how many moves or steps the user has made, and checks whether they've reached the target amount
 			step = {
 				"count": 0,
 				"check": function(h1, h2) {
@@ -26,33 +25,60 @@ var Game = function(size1,size2,target) {
 							|| h2 == buckets.requiredGallons
 							|| h2 + h1 == buckets.requiredGallons;
 				}
-			};
+			},
+	// HINT MODE VARIABLES
+			// tracks whether the user is in "hint mode", meaning the best "path" to solving the puzzle is displayed
+			hintmode = false,
+			// this array will keep track of the steps the user must take to solve the puzzle 
+			// with objects containing the next 'state' (bucket heights) and action "fill, transfer or empty"
+			hintSteps = [], 
+			// currentStep is the index in the hintSteps array of the next step the user needs to take
+			currentStep = 0,
+			// section stores whether it is quicker to start by filling the first bucket or the second
+			section = null,  
+			// it's necessary to calculate the shortest path of completing the puzzle if 
+			// A. we haven't yet   B. the user makes a wrong move and goes "off" the path   C. we resize the buckets  
+			needToCalculateShortestPath = true,
+			// we if we've already calculated the shortest path for given bucket sizes and their current heights
+			// we can store it in a cache to avoid recalculating it.
+			shortestPathMemo = {}, 
+
+	// ANIMATIONS
+			animation_one_in_progress = 0, currentTickb1,
+			animation_two_in_progress = 0, currentTickb2,
+			lakeFull = true;
+			
 
 function Game() {
-	// I believe in the Revealing Prototype Pattern, properties on this Game are public while variables are private 
-	// so called "priviledged method";
+
 	var that = this;
 	this.updateBuckets = function(n) {
 		var split = this.elem.firstElementChild.innerHTML.split("/");
-		split[n] = n == 0 ? this.currentHeight : this.size;
+		if (n == "numerator") {
+			split[0] = this.currentHeight;
+		} else {
+			split[1] = this.size;
+		}
 		this.elem.firstElementChild.innerHTML = split.join("/");
 	};
+	// I used Object.defineProperty here mainly to learn how it works, but it's appropriate because 
+	// every time we set the currentHeights of the buckets, we need to change some things in the UI
+	// so instead of writing that every time we set the currentHeight value, we can just write it once in here.
 	Object.defineProperty(buckets.b1, "currentHeight", {
 		get: function() { return b1CurrentHeight; },
 		set: function(newVal) { 
 			b1CurrentHeight = newVal;
-			that.updateBuckets.call(this, 0);
+			that.updateBuckets.call(this, "numerator");
 		}
 	});
 	Object.defineProperty(buckets.b2, "currentHeight", {
 		get: function() { return b2CurrentHeight; },
 		set: function(newVal) { 
 			b2CurrentHeight = newVal;
-			that.updateBuckets.call(this, 0);
+			that.updateBuckets.call(this, "numerator");
 		}
 	});
 	this.setup(buckets.b1.size, buckets.b2.size);
-
 }
 Game.prototype = function() {
 	var setup = function(size1, size2, g) {
@@ -66,8 +92,8 @@ Game.prototype = function() {
 		buckets.maxBucketHeight = larger;
 		buckets.b1.currentHeight = 0;
 		buckets.b2.currentHeight = 0;
-		g.updateBuckets.call(buckets.b1, 1);
-		g.updateBuckets.call(buckets.b2, 1);
+		g.updateBuckets.call(buckets.b1, "denominator");
+		g.updateBuckets.call(buckets.b2, "denominator");
 		b1Element.style.backgroundSize = "200px 5px";
 		b2Element.style.backgroundSize = "200px 5px";
 		if (newHeight < 30) {
@@ -78,7 +104,7 @@ Game.prototype = function() {
 			b2Element.style.marginTop = 105 - smaller/larger*100 + "px";
 		}
 		step.count = 0;
-		unsetActiveElem();
+		clearActiveElem();
 	},
 	// *=*=*=*=*=*=*=*=*=*=*=*=  Everything related to managing states of the game =*=*=*=*=*=*=*=*=*=*=*=*
 	
@@ -87,10 +113,10 @@ Game.prototype = function() {
 	},
 	newActiveElem = function() {
 		hideActiveElem();
-		unsetActiveElem();
+		clearActiveElem();
 		setNewActiveElem(currentElem());
 	},
-	unsetActiveElem = function() {
+	clearActiveElem = function() {
 		var elem = document.getElementsByClassName("active")[0];
 		if (elem) { 
 			elem.className = elem.className.replace(" active", "");
@@ -105,24 +131,22 @@ Game.prototype = function() {
 		elem.className = elem.className + " active";
 	},
 	correctMove = function() {
-		if (!hintSteps) return false;
+		if (!hintSteps.length) return false;
 		return hintSteps[currentStep].state[0] == buckets.b1.currentHeight 
 				&& hintSteps[currentStep].state[1] == buckets.b2.currentHeight;
 	},
-	changeBucketSizes = function() {
-		var rand1 = Math.random()*50|0,
-				rand2 = Math.random()*50|0;
-		var newTarget = (rand1 + rand2-1)*Math.random()|0;
-		targetSpan.innerHTML = newTarget;
-		buckets.requiredGallons = newTarget;
+	changeBucketSizes = function(n1,n2,target) {
+		var n1, n2, target;
 		historyElems[0].innerHTML = "";
 		historyElems[1].innerHTML = "";
-		hintSteps = null;
+		hintSteps = [];
 		currentStep = 0;
 		needToCalculateShortestPath = true;
 		shortestPathMemo = {};
 		if (hintmode) { hideOrShowAll(1); hintmode = false; };
-		setup(rand1, rand2, g);
+		setup(n1, n2, g);
+		targetSpan.innerHTML = target;
+		buckets.requiredGallons = target;
   },
 // *=*=*=*=*=*=*=*=*=*=*=*=  everything related to making a move =*=*=*=*=*=*=*=*=*=*=*=*
 	makeMove = function(e) {
@@ -141,19 +165,14 @@ Game.prototype = function() {
 					empty(buckets[bucket], bucket);
 					break;
 			}
-			stepHistory();
+			// check if we completed the puzzle
 			if (step.check(buckets.b1.currentHeight, buckets.b2.currentHeight)) { 
 				alert("You did it in " + step.count + " steps!"); 
-			} else {
-				var goodMove = correctMove();
-				if (hintSteps && goodMove) { ++currentStep; }
-				if (!goodMove) { needToCalculateShortestPath = true; }
-				if (hintmode) { 
-					newActiveElem(); 
-				}
-			}
+				changeBucketSizes(5,3,4);
+				return;
+			} 
+			completedMove();
 		}
-		console.log(hintSteps, currentStep);
 	},
 	fill = function(bucket, id) {
 		animateBucket(whichElement(id), heightScale(bucket.currentHeight), heightScale(bucket.size));
@@ -174,80 +193,36 @@ Game.prototype = function() {
 		animateLake("grow");
 		bucket.currentHeight = 0;
 	},
-	stepHistory = function() {
+	addStepHistoryElements = function() {
 		var p1 = document.createElement("p");
 		var p2 = document.createElement("p");
 		p1.innerHTML = buckets.b1.currentHeight;
 		p2.innerHTML = buckets.b2.currentHeight;
 		historyElems[0].appendChild(p1);
 		historyElems[1].appendChild(p2);
-	}
-	// *=*=*=*=*=*=*=*=*=*=*=*=  animations =*=*=*=*=*=*=*=*=*=*=*=*
-	animateLake = function(resize) {
-		if (resize == "shrink" && lakeFull) {
-			lakeFull = false;
-			m.scale(1/1.2, 1/1.2, 0, 0);
-			m.translate(-translateX, -translateY);
-		} else if (resize == "grow" && !lakeFull) {
-			lakeFull = true;
-			m.scale(1.2, 1.2, 0, 0);
-			m.translate(translateX, translateY);
-		}
-		lake.animate({ "transform": m }, 1500);
 	},
-	animateBucket = function(elem, from, to) {
-		var anim, animation_in_progress;
-		var tick = function() {
-			return setInterval(function() { move(anim, animation_in_progress) }, 30);
-		};
-		if (elem.id == "b1") {
-			if (animation_one_in_progress) {
-				clearTimeout(currentTickb1);
-				setFrom();
-			} else { 
-				++animation_one_in_progress; 
-			}
-			currentTickb1 = tick();
-			// order matters here. despite it not being intuitive currentTick has to be defined, then after the timeout runs, anim is defined
-			anim = currentTickb1, animation_in_progress = animation_one_in_progress;
-		} else {
-			if (animation_two_in_progress) {
-				clearTimeout(currentTickb2);
-				setFrom();
-			} else { 
-				++animation_two_in_progress; 
-			}
-			currentTickb2 = tick();
-			anim = currentTickb2, animation_in_progress = animation_two_in_progress;
+	completedMove = function() {
+		addStepHistoryElements();		
+		// if the user made a correct move, increment currentSteps so that the next step is the correct move
+		var goodMove = correctMove();
+		if (hintSteps.length && goodMove) { ++currentStep; }
+		if (!goodMove) { needToCalculateShortestPath = true; }	
+		// order matters here, because the currentStep needs to be updated before we know which button to show next
+		if (hintmode) {
+			newActiveElem(); 
 		}
-		if (to == 0) to = 5; 
-		var increment = (to-from)/50; 
-		var tickCount = 0;
-		function setFrom() {
-			from = +getComputedStyle(elem, null).backgroundSize.split(" ")[1].replace("px", "");
-		}
-		function move(anim, anim_in_prog) {
-			++tickCount;
-			var tickCrement = increment * tickCount;
-			elem.style.backgroundSize = "200px " + (from + tickCrement) + "px";
-			if (Math.abs(tickCrement) >= Math.abs(to-from)) { 
-				--anim_in_prog; 
-				clearTimeout(anim); 
-			}
-		}	
 	},
+	
 	// *=*=*=*=*=*=*=*=*=*=*=*=  Show Hints =*=*=*=*=*=*=*=*=*=*=*=*
-
 	hintMode = function() {
 		var steps, currentInd;
-
 		if (hintmode) {
-			unsetActiveElem();
+			clearActiveElem();
 			hideOrShowAll(1);
 			toggleHintMode();
 			return;
 		}
-		// maybe we've already figured out the shortest path for the given bucket sizes and current height.
+// if we've already figured out the shortest path for the given bucket sizes and current height, it's in the memo
 		var	currentHeights = JSON.stringify([buckets.b1.currentHeight, buckets.b2.currentHeight]);
 		if (shortestPathMemo[currentHeights]) { 
 			needToCalculateShortestPath = false; 
@@ -265,12 +240,10 @@ Game.prototype = function() {
 					,remainingSteps2 = startWithTwo.count - indexTwo;
 
 			var pathOptions = bestPath(remainingSteps1, remainingSteps2, indexOne, indexTwo, startWithOne, startWithTwo);
-			console.log(pathOptions);
 			setBestPath(pathOptions);
 			cachePath(pathOptions);
 		}
 
-		// this means all the right moves have been made
 		hideOrShowAll(0);
 		setNewActiveElem(currentElem());
 		toggleHintMode();
@@ -338,8 +311,7 @@ Game.prototype = function() {
 		}
 		return { "count": newStep.count - 1, "steps": stepArr };
 	},
-
-	// *=*=*=*=*=*=*=*=*=*=*=*=  helpers =*=*=*=*=*=*=*=*=*=*=*=*
+// *=*=*=*=*=*=*=*=*=*=*=*=  helpers =*=*=*=*=*=*=*=*=*=*=*=*
 	whichElement = function(id) {
 		return id == "b1" ? b1Element : b2Element;
 	},
@@ -391,21 +363,83 @@ Game.prototype = function() {
   	return ~~((Height/buckets.maxBucketHeight)*135);
   },
   addListeners = function() {
+  	var n1, n2;
+  	// for buttons fill, transfer, and empty
   	for (var i = 0; i < 2; i++) {
   		uls[i].addEventListener("click", makeMove, false);
   	}
-  	changeSizesButton.addEventListener("click", changeBucketSizes, false);
+  	// if you want to reset the game with different bucket sizes
+  	changeSizesButton.addEventListener("click", function () { 
+
+  		n1 = Math.random()*50|0, n2 = Math.random()*50|0;
+  		changeBucketSizes(n1, n2, (n1 + n2-2)*Math.random()|0 + 1); 
+  		
+  	}, false);
+  	// hint mode
   	show_hints.addEventListener("click", function() {
 			var greatestCF = gcd(buckets.b1.size, buckets.b2.size);
 			if (buckets.requiredGallons % greatestCF != 0) {
 				alert("This is not possible because " + greatestCF + " is the highest common factor of both " + buckets.b1.size + " and " + buckets.b2.size + ", but " + greatestCF + " is not a factor of " + buckets.requiredGallons + "!");
 			} else { hintMode(); }
   	}, false);
+  },
+// *=*=*=*=*=*=*=*=*=*=*=*=  animations =*=*=*=*=*=*=*=*=*=*=*=*
+  animateLake = function(resize) {
+  	if (resize == "shrink" && lakeFull) {
+  		lakeFull = false;
+  		m.scale(1/1.2, 1/1.2, 0, 0);
+  		m.translate(-translateX, -translateY);
+  	} else if (resize == "grow" && !lakeFull) {
+  		lakeFull = true;
+  		m.scale(1.2, 1.2, 0, 0);
+  		m.translate(translateX, translateY);
+  	}
+  	lake.animate({ "transform": m }, 1500);
+  },
+  animateBucket = function(elem, from, to) {
+  	var anim, animation_in_progress;
+  	var tick = function() {
+  		return setInterval(function() { move(anim, animation_in_progress) }, 30);
+  	};
+  	if (elem.id == "b1") {
+  		if (animation_one_in_progress) {
+  			clearTimeout(currentTickb1);
+  			setFrom();
+  		} else { 
+  			++animation_one_in_progress; 
+  		}
+  		// order matters here. despite it not being intuitive currentTick has to be defined, then after the timeout runs, anim is defined
+  		anim = currentTickb1 = tick(), animation_in_progress = animation_one_in_progress;
+  	} else {
+  		if (animation_two_in_progress) {
+  			clearTimeout(currentTickb2);
+  			setFrom();
+  		} else { 
+  			++animation_two_in_progress; 
+  		}
+  		// currentTickb2 = tick();
+  		anim = currentTickb2 = tick(), animation_in_progress = animation_two_in_progress;
+  	}
+  	if (to == 0) to = 5; 
+  	var increment = (to-from)/50; 
+  	var tickCount = 0;
+  	function setFrom() {
+  		from = +getComputedStyle(elem, null).backgroundSize.split(" ")[1].replace("px", "");
+  	}
+  	function move(anim, anim_in_prog) {
+  		++tickCount;
+  		var tickCrement = increment * tickCount;
+  		elem.style.backgroundSize = "200px " + (from + tickCrement) + "px";
+  		if (Math.abs(tickCrement) >= Math.abs(to-from)) { 
+  			--anim_in_prog; 
+  			clearTimeout(anim); 
+  		}
+  	}	
   };
   return {
   	'setup': setup,
-  	'hintMode': hintMode,
-  	'makeMove': makeMove,
+  	// 'hintMode': hintMode,
+  	// 'makeMove': makeMove,
   	'addListeners': addListeners
   }
 }();
