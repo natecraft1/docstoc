@@ -14,7 +14,7 @@ var Game = function(size1,size2,target) {
 			},
 			b1CurrentHeight = b2CurrentHeight = 0, 
 			hintmode = false, hintSteps, lakeFull = true,
-			section = null, currentStep = 0, needToReCalculateShortestPath = true,
+			section = null, currentStep = 0, needToCalculateShortestPath = true,
 			animation_one_in_progress = 0, currentTickb1,
 			animation_two_in_progress = 0, currentTickb2,
 			shortestPathMemo = {},
@@ -119,7 +119,7 @@ Game.prototype = function() {
 		historyElems[1].innerHTML = "";
 		hintSteps = null;
 		currentStep = 0;
-		needToReCalculateShortestPath = true;
+		needToCalculateShortestPath = true;
 		shortestPathMemo = {};
 		if (hintmode) { hideOrShowAll(1); hintmode = false; };
 		setup(rand1, rand2, g);
@@ -147,7 +147,7 @@ Game.prototype = function() {
 			} else {
 				var goodMove = correctMove();
 				if (hintSteps && goodMove) { ++currentStep; }
-				if (!goodMove) { needToReCalculateShortestPath = true; }
+				if (!goodMove) { needToCalculateShortestPath = true; }
 				if (hintmode) { 
 					newActiveElem(); 
 				}
@@ -240,16 +240,23 @@ Game.prototype = function() {
 
 	hintMode = function() {
 		var steps, currentInd;
+
 		if (hintmode) {
 			unsetActiveElem();
 			hideOrShowAll(1);
 			toggleHintMode();
 			return;
 		}
+		// maybe we've already figured out the shortest path for the given bucket sizes and current height.
+		var	currentHeights = JSON.stringify([buckets.b1.currentHeight, buckets.b2.currentHeight]);
+		if (shortestPathMemo[currentHeights]) { 
+			needToCalculateShortestPath = false; 
+			setBestPath(shortestPathMemo[currentHeights]);
+		}
 // we need to recalculate the shortest path whenever we haven't clicked "Show Hints yet"
 // or when we have clicked it, and somewhere along the way we made a sadly horrible move && life decision
-		if (needToReCalculateShortestPath) {
-			needToReCalculateShortestPath = false;
+		if (needToCalculateShortestPath) {
+			needToCalculateShortestPath = false;
 			var startWithOne = trial(buckets.b1.size, buckets.b2.size, buckets.requiredGallons, true)
 					,startWithTwo = trial(buckets.b2.size, buckets.b1.size, buckets.requiredGallons, false)
 					,indexOne = currentIndex(startWithOne.steps)
@@ -258,34 +265,45 @@ Game.prototype = function() {
 					,remainingSteps2 = startWithTwo.count - indexTwo;
 
 			var pathOptions = bestPath(remainingSteps1, remainingSteps2, indexOne, indexTwo, startWithOne, startWithTwo);
-			steps = pathOptions.steps, currentInd = pathOptions.ind;
-			hintSteps = steps.slice(0);
+			console.log(pathOptions);
+			setBestPath(pathOptions);
 			cachePath(pathOptions);
-			setCurrentStep(currentInd);
 		}
+
+		// this means all the right moves have been made
 		hideOrShowAll(0);
 		setNewActiveElem(currentElem());
 		toggleHintMode();
 	},
-	cachePath = function() {
+	cachePath = function(pathOptions) {
 		var bucketHeights = [buckets.b1.currentHeight, buckets.b2.currentHeight];
 		shortestPathMemo[JSON.stringify(bucketHeights)] = pathOptions;
 	},
 	bestPath = function(remaining1, remaining2, indexOne, indexTwo, startWithOne, startWithTwo) {
 		if (remaining1 <= remaining2) {
-			return setBestPath("b1Wrapper", indexOne, startWithOne.steps);
+			return {"section": "b1Wrapper", "ind": indexOne, "steps": startWithOne.steps };
 		} else {
-			return setBestPath("b2Wrapper", indexTwo, startWithTwo.steps);
+			return {"section": "b2Wrapper", "ind": indexTwo, "steps": startWithTwo.steps };
 		}
 	},
-	setBestPath = function(section, index, steps) {
-		section = section;
-		return { "ind": index, "steps": steps };
+	setBestPath = function(opts) {
+		section = opts.section;
+		hintSteps = opts.steps.slice(0);
+		setCurrentStep(opts.ind, section);
 	},
-	setCurrentStep = function(currentInd) {
+	setCurrentStep = function(currentInd, sect) {
 		if (currentInd == -1) { 
+			// wrong bucket is full, so empty it and get on the right path
 			currentStep = 0;
 			hintSteps.unshift({"step": "empty", "state": [0,0]});
+		} else if (currentInd == -2) {
+			// both buckets are full, so empty the one that leads us to the shortest path
+			currentStep = 0;
+			if (sect == "b1Wrapper") {
+				hintSteps[0] = {"step": "empty", "state": [buckets.b1.size, 0]};
+			} else {
+				hintSteps[0] = {"step": "empty", "state": [0, buckets.b2.size]};
+			}
 		} else if (currentInd == 0) {
 			currentStep = 0;
 		} else {
