@@ -6,7 +6,7 @@ var Game = function(size1,size2,target) {
 			targetSpan = document.getElementById("target").firstElementChild,
 			show_hints = document.getElementById("show_hints"),
 			nodes = Array.prototype.slice.call(document.getElementsByClassName("move")),
-			historyElems = document.getElementsByClassName("history"),
+			historyElems = document.getElementsByClassName("moveHistory"),
 			changeSizesButton = document.getElementById("changeSizes"),
 			uls = document.getElementsByTagName("ul"),
 	// BUCKETS
